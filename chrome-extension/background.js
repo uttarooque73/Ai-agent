@@ -70,6 +70,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
     if (!pending) {
       console.warn(LOG, "Ignoring results because no search is pending for this tab", { tabId });
+      sendResponse({ received: true, ignored: true });
       return false;
     }
 
@@ -79,6 +80,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         ok: false,
         error: "Google is showing a consent or anti-automation challenge. Complete it in the opened Google tab, then start the search again."
       });
+      sendResponse({ received: true, challenge: true });
       return false;
     }
 
@@ -89,6 +91,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         ok: false,
         error: "No organic results were found on the Google page. Google may have changed its page or shown a challenge."
       });
+      sendResponse({ received: true, resultCount: 0 });
       return false;
     }
 
@@ -128,6 +131,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           if (chrome.runtime.lastError) console.warn(LOG, "Could not close temporary tab", chrome.runtime.lastError.message);
         });
       });
+    // Acknowledge the content-script message immediately. The separate popup
+    // response is completed by finish() after the cache request resolves.
+    sendResponse({ received: true, resultCount: results.length });
     return false;
   }
 
