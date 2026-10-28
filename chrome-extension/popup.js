@@ -32,15 +32,19 @@ form.addEventListener("submit", async (event) => {
   button.disabled = true;
   button.textContent = "Searching…";
   resultsNode.replaceChildren();
-  statusNode.textContent = "Opening Google in a regular Chrome tab…";
+  statusNode.textContent = "Searching Google in a temporary background tab…";
 
   try {
     const response = await chrome.runtime.sendMessage({ type: "JARVIS_SEARCH", query });
     if (!response?.ok) throw new Error(response?.error || "Search failed.");
     renderResults(response.results || []);
-    statusNode.textContent = response.results?.length
-      ? "Found " + response.results.length + " results. Shared with local Jarvis when its API is running."
-      : "No results were extracted. Check the Google tab for a consent or CAPTCHA page.";
+    if (response.cachedInJarvis) {
+      statusNode.textContent = "Found " + response.results.length + " results. Saved to Jarvis; the temporary Google tab was closed.";
+    } else {
+      statusNode.textContent = "Found " + response.results.length + " results, but Jarvis could not cache them" +
+        (response.cacheError ? " (" + response.cacheError + ")" : "") +
+        ". Check that the local API is running. The temporary Google tab was closed.";
+    }
     chrome.storage.local.set({ lastQuery: query });
   } catch (error) {
     statusNode.textContent = error instanceof Error ? error.message : "Search failed.";
