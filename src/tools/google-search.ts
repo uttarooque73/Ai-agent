@@ -13,12 +13,12 @@ function decodeHtml(value: string): string {
     .replace(/&#39;|&apos;/gi, "'")
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">")
-    .replace(/&#(\\d+);/g, (_, number: string) => String.fromCodePoint(Number(number)))
-    .replace(/&#x([\\da-f]+);/gi, (_, number: string) => String.fromCodePoint(parseInt(number, 16)));
+    .replace(/&#(\d+);/g, (_, number: string) => String.fromCodePoint(Number(number)))
+    .replace(/&#x([\da-f]+);/gi, (_, number: string) => String.fromCodePoint(parseInt(number, 16)));
 }
 
 function cleanText(value: string): string {
-  return decodeHtml(value.replace(/<[^>]*>/g, " ").replace(/\\s+/g, " ")).trim();
+  return decodeHtml(value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ")).trim();
 }
 
 function safeResult(title: string, rawUrl: string, snippet: string): SearchResult | null {
@@ -28,7 +28,7 @@ function safeResult(title: string, rawUrl: string, snippet: string): SearchResul
   try {
     url = new URL(decodeHtml(rawUrl.trim()));
     if (url.protocol !== "https:") return null;
-    if (/(^|\\.)duckduckgo\\.com$|(^|\\.)bing\\.com$|(^|\\.)mojeek\\.com$/i.test(url.hostname)) {
+    if (/(^|\.)duckduckgo\.com$|(^|\.)bing\.com$|(^|\.)mojeek\.com$/i.test(url.hostname)) {
       return null;
     }
   } catch {
@@ -40,10 +40,10 @@ function safeResult(title: string, rawUrl: string, snippet: string): SearchResul
 
 function parseDuckDuckGo(html: string): SearchResult[] {
   const results: SearchResult[] = [];
-  const blocks = html.match(/<div[^>]*class=["'][^"']*result[^"']*["'][\\s\\S]*?<\\/div>\\s*<\\/div>/gi) ?? [html];
+  const blocks = html.match(/<div[^>]*class=["'][^"']*result[^"']*["'][\s\S]*?<\/div>\s*<\/div>/gi) ?? [html];
   for (const block of blocks) {
-    const anchor = block.match(/<a[^>]*class=["'][^"']*result__a[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>([\\s\\S]*?)<\\/a>/i)
-      ?? block.match(/<a[^>]*href=["']([^"']+)["'][^>]*class=["'][^"']*result__a[^"']*["'][^>]*>([\\s\\S]*?)<\\/a>/i);
+    const anchor = block.match(/<a[^>]*class=["'][^"']*result__a[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/i)
+      ?? block.match(/<a[^>]*href=["']([^"']+)["'][^>]*class=["'][^"']*result__a[^"']*["'][^>]*>([\s\S]*?)<\/a>/i);
     if (!anchor) continue;
     let href = decodeHtml(anchor[1]);
     try {
@@ -52,8 +52,8 @@ function parseDuckDuckGo(html: string): SearchResult[] {
       if (redirect) href = redirect;
       else href = parsed.toString();
     } catch { continue; }
-    const snippetMatch = block.match(/<a[^>]*class=["'][^"']*result__snippet[^"']*["'][^>]*>([\\s\\S]*?)<\\/a>/i)
-      ?? block.match(/<div[^>]*class=["'][^"']*result__snippet[^"']*["'][^>]*>([\\s\\S]*?)<\\/div>/i);
+    const snippetMatch = block.match(/<a[^>]*class=["'][^"']*result__snippet[^"']*["'][^>]*>([\s\S]*?)<\/a>/i)
+      ?? block.match(/<div[^>]*class=["'][^"']*result__snippet[^"']*["'][^>]*>([\s\S]*?)<\/div>/i);
     const result = safeResult(anchor[2], href, snippetMatch?.[1] ?? "");
     if (result) results.push(result);
     if (results.length >= MAX_RESULTS) break;
@@ -63,10 +63,10 @@ function parseDuckDuckGo(html: string): SearchResult[] {
 
 function parseBingRss(xml: string): SearchResult[] {
   const results: SearchResult[] = [];
-  for (const item of xml.match(/<item>[\\s\\S]*?<\\/item>/gi) ?? []) {
-    const title = item.match(/<title>([\\s\\S]*?)<\\/title>/i)?.[1] ?? "";
-    const url = item.match(/<link>([\\s\\S]*?)<\\/link>/i)?.[1] ?? "";
-    const description = item.match(/<description>([\\s\\S]*?)<\\/description>/i)?.[1] ?? "";
+  for (const item of xml.match(/<item>[\s\S]*?<\/item>/gi) ?? []) {
+    const title = item.match(/<title>([\s\S]*?)<\/title>/i)?.[1] ?? "";
+    const url = item.match(/<link>([\s\S]*?)<\/link>/i)?.[1] ?? "";
+    const description = item.match(/<description>([\s\S]*?)<\/description>/i)?.[1] ?? "";
     const result = safeResult(title, url, description);
     if (result) results.push(result);
     if (results.length >= MAX_RESULTS) break;
@@ -76,9 +76,9 @@ function parseBingRss(xml: string): SearchResult[] {
 
 function parseMojeek(html: string): SearchResult[] {
   const results: SearchResult[] = [];
-  const blocks = html.match(/<li[^>]*class=["'][^"']*result[^"']*["'][\\s\\S]*?<\\/li>/gi) ?? [];
+  const blocks = html.match(/<li[^>]*class=["'][^"']*result[^"']*["'][\s\S]*?<\/li>/gi) ?? [];
   for (const block of blocks) {
-    const anchor = block.match(/<a[^>]*href=["'](https?:[^"']+)["'][^>]*>([\\s\\S]*?)<\\/a>/i);
+    const anchor = block.match(/<a[^>]*href=["'](https?:[^"']+)["'][^>]*>([\s\S]*?)<\/a>/i);
     if (!anchor) continue;
     const result = safeResult(anchor[2], anchor[1], block);
     if (result) results.push(result);
