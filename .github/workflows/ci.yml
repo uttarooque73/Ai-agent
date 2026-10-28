@@ -23,6 +23,8 @@ jobs:
         run: npm run build
       - name: Run tests
         run: npm test
+      - name: Install Chromium for browser fallback
+        run: npx playwright install --with-deps chromium
       - name: Run live internet web search test
         run: npm run test:live-search
         env:
