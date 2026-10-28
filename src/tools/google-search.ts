@@ -1,5 +1,6 @@
 import { chromium } from "playwright";
 import { getExtensionSearchResults } from "./extension-search-cache.js";
+import { duckDuckGoMcpSearch } from "./duckduckgo-mcp.js";
 
 export interface SearchResult {
   title: string;
@@ -48,6 +49,10 @@ export async function googleSearch(query: string): Promise<SearchResponse> {
   if (!normalizedQuery || normalizedQuery.length > 500) {
     throw new Error("Search query must contain between 1 and 500 characters.");
   }
+
+  // Prefer the configured remote DuckDuckGo MCP when available. It avoids Google scraping.
+  const duckDuckGoMcpUrl = process.env.DUCKDUCKGO_MCP_URL?.trim();
+  if (duckDuckGoMcpUrl) return duckDuckGoMcpSearch(normalizedQuery, duckDuckGoMcpUrl);
 
   // Prefer fresh results supplied by the user's regular Chrome session.
   // The cache is in-memory and expires after ten minutes.
