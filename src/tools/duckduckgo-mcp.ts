@@ -66,12 +66,12 @@ function parseMcpContent(response: unknown): SearchResult[] {
       // Some MCP servers return human-readable Markdown instead of JSON.
     }
 
-    const markdownLink = /(?:^|\\n)\\s*(?:[-*]\\s*)?\\[([^\\]]+)\\]\\((https:\\/\\/[^)]+)\\)([^\\n]*)/g;
+    const markdownLink = /(?:^|\n)\s*(?:[-*]\s*)?\[([^\]]+)\]\((https:\/\/[^)]+)\)([^\n]*)/g;
     for (const match of block.text.matchAll(markdownLink)) {
       const result = toSafeResult({
         title: match[1],
         url: match[2],
-        snippet: match[3].replace(/^\\s*[-:–—]\\s*/, ""),
+        snippet: match[3].replace(/^\s*[-:–—]\s*/, ""),
       });
       if (result && !seen.has(result.url)) {
         seen.add(result.url);
@@ -80,13 +80,13 @@ function parseMcpContent(response: unknown): SearchResult[] {
     }
 
     // The reference DuckDuckGo MCP formats results as numbered titles followed by URL/Snippet lines.
-    const lines = block.text.split(/\\r?\\n/).map((line) => line.trim()).filter(Boolean);
+    const lines = block.text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
     for (let index = 0; index < lines.length; index += 1) {
-      const urlMatch = lines[index].match(/^URL:\\s*(https:\\/\\/\\S+)/i);
+      const urlMatch = lines[index].match(/^URL:\s*(https:\/\/\S+)/i);
       if (!urlMatch) continue;
-      const title = (lines[index - 1] ?? "").replace(/^\\d+[.)]\\s*/, "").replace(/^[-*]\\s*/, "");
+      const title = (lines[index - 1] ?? "").replace(/^\d+[.)]\s*/, "").replace(/^[-*]\s*/, "");
       const snippetLine = lines[index + 1] ?? "";
-      const snippet = snippetLine.replace(/^(?:snippet|description):\\s*/i, "");
+      const snippet = snippetLine.replace(/^(?:snippet|description):\s*/i, "");
       const result = toSafeResult({ title, url: urlMatch[1], snippet });
       if (result && !seen.has(result.url)) {
         seen.add(result.url);
