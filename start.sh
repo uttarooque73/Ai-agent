@@ -19,6 +19,30 @@ NODE_MAJOR="$(node -p 'Number(process.versions.node.split(".")[0])')"
 [[ "$NODE_MAJOR" -ge 20 ]] || fail "Node.js 20+ is required. Current version: $(node --version)."
 ok "Node.js $(node --version) and npm $(npm --version) found."
 
+# Update the checkout safely before installing dependencies or starting the app.
+# Never overwrite local work: only fast-forward a clean checkout on the main branch.
+if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  CURRENT_BRANCH="$(git branch --show-current)"
+  if [[ "$CURRENT_BRANCH" != "main" ]]; then
+    warn "Current Git branch is '$CURRENT_BRANCH', not 'main'; skipping automatic update."
+  elif [[ -n "$(git status --porcelain)" ]]; then
+    warn "Local Git changes detected; skipping automatic pull to protect your work."
+    warn "Commit or stash your changes, then run 'git pull --ff-only origin main' when ready."
+  elif ! git remote get-url origin >/dev/null 2>&1; then
+    warn "No Git remote named 'origin'; skipping automatic update."
+  else
+    log "Checking for updates from origin/main..."
+    if git pull --ff-only origin main; then
+      ok "Repository is up to date with origin/main."
+    else
+      warn "Could not update from origin/main. Check your network, Git credentials, and branch status."
+      warn "Continuing with the local checkout; fix the Git issue and rerun this script to update."
+    fi
+  fi
+else
+  warn "Git checkout not detected; skipping automatic update."
+fi
+
 # Create local environment file without overwriting existing user settings.
 if [[ ! -f .env ]]; then
   if [[ -f .env.example ]]; then
@@ -76,22 +100,25 @@ if ! ollama list 2>/dev/null | awk 'NR > 1 {print $1}' | grep -Fxq "$OLLAMA_MODE
 fi
 ok "Ollama model '$OLLAMA_MODEL' is available."
 
-# Install npm dependencies when needed.
+# Install or refresh npm dependencies after the Git update.
 if [[ ! -d node_modules ]]; then
   log "node_modules is missing; installing npm dependencies..."
   npm install || fail "npm install failed. Review the error above and rerun bash start.sh."
+elif [[ -f package-lock.json ]] && { [[ ! -f node_modules/.package-lock.json ]] || [[ package-lock.json -nt node_modules/.package-lock.json ]]; }; then
+  log "package-lock.json changed; syncing npm dependencies..."
+  npm install || fail "npm install failed. Review the error above and rerun bash start.sh."
 else
-  ok "npm dependencies directory exists."
+  ok "npm dependencies are installed and appear up to date."
 fi
 
 # Make sure Playwright's Chromium browser is available.
 if [[ ! -d "${HOME}/.cache/ms-playwright" ]] && [[ "$(uname -s)" != "Darwin" ]]; then
   log "Playwright browser cache not found; installing Chromium..."
-  npx playwright install chromium || fail "Could not install Playwright Chromium."
+  NODE_USE_SYSTEM_CA=1 npx playwright install chromium || fail "Could not install Playwright Chromium. If you see SELF_SIGNED_CERT_IN_CHAIN, configure NODE_EXTRA_CA_CERTS with your trusted root CA certificate and rerun bash start.sh."
 elif ! npx playwright --version >/dev/null 2>&1; then
   log "Playwright CLI unavailable; installing project dependencies..."
   npm install || fail "npm install failed."
-  npx playwright install chromium || fail "Could not install Playwright Chromium."
+  NODE_USE_SYSTEM_CA=1 npx playwright install chromium || fail "Could not install Playwright Chromium. If you see SELF_SIGNED_CERT_IN_CHAIN, configure NODE_EXTRA_CA_CERTS with your trusted root CA certificate and rerun bash start.sh."
 else
   # The browser may be installed in a platform-specific cache; let Playwright verify/repair it.
   if ! node --input-type=module -e "import { chromium } from 'playwright'; const b = await chromium.launch({headless:true}); await b.close();" >/dev/null 2>&1; then
