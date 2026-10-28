@@ -50,26 +50,35 @@ export async function googleSearch(query: string): Promise<SearchResponse> {
 
   const browser = await chromium.launch({ headless: true });
   try {
-    const page = await browser.newPage({
+    const context = await browser.newContext({
       locale: "en-US",
       userAgent: USER_AGENT,
       viewport: { width: 1365, height: 900 },
+      extraHTTPHeaders: {
+        "Accept-Language": "en-US,en;q=0.9",
+      },
     });
+    const page = await context.newPage();
     page.setDefaultNavigationTimeout(REQUEST_TIMEOUT_MS);
 
+    // Google's basic HTML mode avoids depending on its JavaScript-heavy result UI.
+    // It remains keyless, though Google can still block automated traffic.
     const searchUrl = new URL("https://www.google.com/search");
     searchUrl.searchParams.set("q", normalizedQuery);
     searchUrl.searchParams.set("hl", "en");
     searchUrl.searchParams.set("gl", "in");
+    searchUrl.searchParams.set("gbv", "1");
 
     await page.goto(searchUrl.toString(), { waitUntil: "domcontentloaded" });
-    await page.locator("body").innerText({ timeout: 8_000 }).catch(() => "");
-
+    const bodyText = await page.locator("body").innerText({ timeout: 8_000 }).catch(() => "");
     const finalUrl = page.url();
-    const bodyText = await page.locator("body").innerText().catch(() => "");
-    if (/\/sorry\//i.test(finalUrl) || /unusual traffic|automated queries|verify you are human|captcha/i.test(bodyText)) {
+
+    if (
+      /\/sorry\//i.test(finalUrl) ||
+      /unusual traffic|automated queries|verify you are human|captcha|our systems have detected unusual traffic/i.test(bodyText)
+    ) {
       throw new Error(
-        "Google returned an anti-automation or CAPTCHA page. Search is keyless, but Google is not allowing this request from the current network.",
+        "Google returned an anti-automation or CAPTCHA page. Search is keyless, but Google is blocking automated requests from this network. Open the Google search URL in a regular browser to check whether Google requires verification.",
       );
     }
 
@@ -100,7 +109,7 @@ export async function googleSearch(query: string): Promise<SearchResponse> {
 
     if (results.length === 0) {
       throw new Error(
-        "Google Search returned no extractable organic results. It may have served a consent page, JavaScript challenge, CAPTCHA, or changed its markup.",
+        "Google Search returned no extractable organic results. It may have served a consent page, CAPTCHA, or changed its markup.",
       );
     }
 
