@@ -90,4 +90,23 @@ describe("Google web search", () => {
     );
     expect(chromium.launch).not.toHaveBeenCalled();
   });
+
+  it("uses cached Chrome extension results before launching Playwright", async () => {
+    const query = "jarvis extension cache integration test";
+    const cachedResults = [
+      {
+        title: "Extension search result",
+        url: "https://example.com/extension-search-result",
+        snippet: "Result delivered by the Chrome extension",
+      },
+    ];
+    const { saveExtensionSearchResults } = await import("../src/tools/extension-search-cache.js");
+    saveExtensionSearchResults(query, cachedResults);
+
+    const result = await googleSearch(query.toUpperCase());
+
+    expect(result.results).toEqual(cachedResults);
+    expect(result.query).toBe(query);
+    expect(chromium.launch).not.toHaveBeenCalled();
+  });
 });
