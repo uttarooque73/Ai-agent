@@ -19,7 +19,6 @@
     for (const heading of headings) {
       const anchor = heading.closest("a[href]");
       if (!anchor) continue;
-
       let url;
       try {
         url = new URL(anchor.href, location.href);
@@ -27,7 +26,6 @@
         console.warn(LOG, "Skipping invalid result URL", { href: anchor.href, error: String(error) });
         continue;
       }
-
       if (!/^https?:$/.test(url.protocol)) continue;
       if (/(^|\.)google\.[a-z.]+$/i.test(url.hostname) || /(^|\.)googleusercontent\.com$/i.test(url.hostname)) continue;
       if (url.pathname.startsWith("/search") || url.pathname.startsWith("/url")) continue;
@@ -42,7 +40,6 @@
       if (!title) continue;
       const rawSnippet = (container?.innerText || "").replace(/\s+/g, " ").trim();
       const snippet = rawSnippet.startsWith(title) ? rawSnippet.slice(title.length).trim() : rawSnippet;
-
       seen.add(url.href);
       results.push({ title, url: url.href, snippet });
       if (results.length >= 8) break;
@@ -54,9 +51,7 @@
     const started = Date.now();
     let results = [];
     while (Date.now() - started < MAX_WAIT_MS) {
-      if (inspectChallenge()) {
-        return { challenge: true, results: [] };
-      }
+      if (inspectChallenge()) return { challenge: true, results: [] };
       results = extractResults();
       if (results.length) return { challenge: false, results };
       await new Promise((resolve) => setTimeout(resolve, POLL_MS));
@@ -67,16 +62,21 @@
   void (async () => {
     const query = new URL(location.href).searchParams.get("q") || "";
     const inspection = await waitForResults();
-    console.log(LOG, "Page inspection and extraction complete", {
+    const bodyText = document.body?.innerText || "";
+    const diagnostics = {
       url: location.href,
+      hostname: location.hostname,
       title: document.title,
-      bodyTextLength: document.body?.innerText?.length || 0,
+      readyState: document.readyState,
+      bodyTextLength: bodyText.length,
+      bodyPreview: bodyText.replace(/\s+/g, " ").slice(0, 300),
+      h3Count: document.querySelectorAll("h3").length,
+      searchContainerFound: Boolean(document.querySelector("#search")),
       challenge: inspection.challenge,
       resultCount: inspection.results.length,
-      sampleTitles: inspection.results.slice(0, 3).map((result) => result.title),
-      waitedMs: MAX_WAIT_MS
-    });
-
+      sampleTitles: inspection.results.slice(0, 3).map((result) => result.title)
+    };
+    console.log(LOG, "Page inspection and extraction complete", { ...diagnostics, bodyPreview: diagnostics.bodyPreview });
     if (inspection.challenge) {
       console.warn(LOG, "Detected Google consent/CAPTCHA page; not attempting to bypass it.");
     } else if (!inspection.results.length) {
@@ -87,7 +87,8 @@
       type: "JARVIS_GOOGLE_RESULTS",
       query,
       challenge: inspection.challenge,
-      results: inspection.results
+      results: inspection.results,
+      diagnostics
     }, (response) => {
       if (chrome.runtime.lastError) {
         console.error(LOG, "Failed to send extracted results to extension background", chrome.runtime.lastError.message);
