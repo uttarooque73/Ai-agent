@@ -29,3 +29,7 @@ jobs:
         run: npm run test:live-search
         env:
           LIVE_SEARCH_QUERY: Node.js official website
+      - name: Verify Node.js LTS search accuracy against official releases
+        run: npm run test:node-version-search
+        env:
+          NODE_VERSION_SEARCH_QUERY: latest Node.js LTS version site:nodejs.org/en/download
