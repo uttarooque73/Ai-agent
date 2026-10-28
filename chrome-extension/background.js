@@ -30,6 +30,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       const tabId = tab.id;
       const timer = setTimeout(() => {
+        // Keep the tab open on timeout so the user can inspect a consent or CAPTCHA page.
         finish(tabId, {
           ok: false,
           error: "Google did not provide readable results in time. Check the opened tab for consent, sign-in, or CAPTCHA prompts."
@@ -68,16 +69,41 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query, results })
-    }).catch(() => undefined);
+    }).then(async (response) => {
+      if (!response.ok) {
+        throw new Error("Jarvis API returned HTTP " + response.status);
+      }
+      return response.json();
+    });
 
-    // Give the local API a brief chance to cache results before returning to the popup.
-    // The popup still receives results if the API is stopped or slow.
-    void Promise.race([
-      cacheRequest,
-      new Promise((resolve) => setTimeout(resolve, 1000))
-    ]).finally(() => finish(tabId, { ok: true, query, results }));
+    // Cache the results before responding. Close the temporary Google tab after
+    // successful extraction so repeated searches do not leave duplicate tabs.
+    void cacheRequest
+      .then(() => {
+        finish(tabId, { ok: true, query, results, cachedInJarvis: true });
+        chrome.tabs.remove(tabId, () => void chrome.runtime.lastError);
+      })
+      .catch((error) => {
+        finish(tabId, {
+          ok: true,
+          query,
+          results,
+          cachedInJarvis: false,
+          cacheError: error instanceof Error ? error.message : "Could not cache results in Jarvis."
+        });
+        // Results were extracted, so close the temporary tab even if Jarvis is offline.
+        chrome.tabs.remove(tabId, () => void chrome.runtime.lastError);
+      });
     return false;
   }
 
   return false;
+});
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  const pending = pendingByTab.get(tabId);
+  if (!pending) return;
+  clearTimeout(pending.timer);
+  pendingByTab.delete(tabId);
+  pending.respond({ ok: false, error: "The Google search tab was closed before results were extracted." });
 });
