@@ -7,10 +7,18 @@ const model = new ChatOllama({
   temperature: 0.2,
 });
 
-export async function askLocalModel(question: string): Promise<string> {
+export async function askLocalModel(question: string, webContext?: string): Promise<string> {
+  const systemPrompt = webContext
+    ? "You are Jarvis, a precise and helpful AI research assistant. Answer the user's question using the supplied web search results when relevant. Do not claim that a source says something unless its title/snippet supports it. Include source URLs in your answer. If the results are insufficient or conflicting, say so clearly."
+    : "You are Jarvis, a precise and helpful AI assistant. If you do not know a current fact, say you need a web source rather than inventing one.";
+
+  const userPrompt = webContext
+    ? `Question: ${question}\n\nWeb search context:\n${webContext}`
+    : question;
+
   const response = await model.invoke([
-    new SystemMessage("You are Jarvis, a precise and helpful AI assistant. If you do not know a current fact, say you need a web source rather than inventing one."),
-    new HumanMessage(question),
+    new SystemMessage(systemPrompt),
+    new HumanMessage(userPrompt),
   ]);
 
   if (typeof response.content === "string") return response.content;
