@@ -1,57 +1,89 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { chromium } from "playwright";
 import { googleSearch } from "../src/tools/google-search.js";
 
+vi.mock("playwright", () => ({
+  chromium: { launch: vi.fn() },
+}));
+
 afterEach(() => {
-  vi.unstubAllGlobals();
+  vi.clearAllMocks();
 });
 
-describe("keyless web search", () => {
-  it("extracts results from DuckDuckGo HTML without an API key", async () => {
-    const html = `
-      <div class="result">
-        <a class="result__a" href="https://example.com/node">Node.js guide</a>
-        <a class="result__snippet">A guide to Node.js features.</a>
-      </div>
-    `;
-    const fetchMock = vi.fn().mockResolvedValue(new Response(html, { status: 200 }));
-    vi.stubGlobal("fetch", fetchMock);
+function mockBrowser({
+  results = [],
+  bodyText = "Google Search",
+  url = "https://www.google.com/search?q=test",
+}: {
+  results?: Array<{ title: string; url: string; snippet: string }>;
+  bodyText?: string;
+  url?: string;
+} = {}) {
+  const bodyLocator = {
+    innerText: vi.fn().mockResolvedValue(bodyText),
+  };
+  const resultLocator = {
+    evaluateAll: vi.fn().mockResolvedValue(results),
+  };
+  const page = {
+    setDefaultNavigationTimeout: vi.fn(),
+    goto: vi.fn().mockResolvedValue(null),
+    url: vi.fn().mockReturnValue(url),
+    locator: vi.fn((selector: string) =>
+      selector === "body" ? bodyLocator : resultLocator,
+    ),
+  };
+  const browser = {
+    newPage: vi.fn().mockResolvedValue(page),
+    close: vi.fn().mockResolvedValue(undefined),
+  };
+  vi.mocked(chromium.launch).mockResolvedValue(browser as never);
+  return { browser, page };
+}
+
+describe("Google web search", () => {
+  it("extracts organic results from Google without an API key", async () => {
+    const { browser, page } = mockBrowser({
+      results: [
+        {
+          title: "Node.js release notes",
+          url: "https://nodejs.org/en/blog/release/",
+          snippet: "Node.js release notes and features",
+        },
+      ],
+    });
 
     const result = await googleSearch("latest Node.js features");
 
     expect(result.query).toBe("latest Node.js features");
     expect(result.results[0]).toEqual({
-      title: "Node.js guide",
-      url: "https://example.com/node",
-      snippet: "A guide to Node.js features.",
+      title: "Node.js release notes",
+      url: "https://nodejs.org/en/blog/release/",
+      snippet: "and features",
     });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(String(fetchMock.mock.calls[0][0])).toContain("duckduckgo.com");
+    expect(page.goto).toHaveBeenCalledWith(
+      expect.stringContaining("https://www.google.com/search?"),
+      { waitUntil: "domcontentloaded" },
+    );
+    expect(browser.close).toHaveBeenCalledOnce();
   });
 
-  it("falls back to Bing RSS when DuckDuckGo is blocked", async () => {
-    const rss = `<?xml version="1.0"?><rss><channel><item>
-      <title>Node.js release notes</title>
-      <link>https://nodejs.org/en/blog/release/</link>
-      <description>Official release information.</description>
-    </item></channel></rss>`;
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response("blocked", { status: 403 }))
-      .mockResolvedValueOnce(new Response(rss, { status: 200 }));
-    vi.stubGlobal("fetch", fetchMock);
+  it("reports a clear error when Google returns an anti-automation page", async () => {
+    const { browser } = mockBrowser({
+      bodyText: "Our systems have detected unusual traffic from your computer network.",
+      url: "https://www.google.com/sorry/index",
+    });
 
-    const result = await googleSearch("latest Node.js features");
-
-    expect(result.results[0]?.title).toBe("Node.js release notes");
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await expect(googleSearch("latest Node.js features")).rejects.toThrow(
+      "Google returned an anti-automation or CAPTCHA page",
+    );
+    expect(browser.close).toHaveBeenCalledOnce();
   });
 
-  it("rejects an empty query before making a network request", async () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
-
+  it("rejects an empty query before launching a browser", async () => {
     await expect(googleSearch("  ")).rejects.toThrow(
       "Search query must contain between 1 and 500 characters.",
     );
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(chromium.launch).not.toHaveBeenCalled();
   });
 });
