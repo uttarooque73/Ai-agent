@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "Jarvis Keyless Search",
+  "version": "1.0.0",
+  "description": "Search Google in your normal Chrome session and share visible results with local Jarvis.",
+  "permissions": [
+    "tabs",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://www.google.com/*",
+    "http://localhost:3000/*",
+    "http://127.0.0.1:3000/*"
+  ],
+  "action": {
+    "default_title": "Jarvis Search",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.google.com/search*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
