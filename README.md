@@ -5,7 +5,7 @@ A step-by-step learning project for building a local-first AI agent with Node.js
 ## Goals
 
 - Answer general questions using a local Ollama model.
-- Search the web on demand with Playwright (no search API key required for this learning prototype).
+- Search the web on demand through the Tavily Search API, returning structured results for the local agent.
 - Read public webpages and return sourced summaries.
 - Show the sources used so answers can be checked.
 - Add LangGraph orchestration and MCP tools in later steps.
@@ -32,7 +32,7 @@ Open http://localhost:3000/health after the server starts. Press Ctrl+C to stop 
 
 ## Environment
 
-Set `OLLAMA_BASE_URL` and `OLLAMA_MODEL` in `.env`. Defaults are `http://127.0.0.1:11434` and `qwen3:4b`.
+Set `OLLAMA_BASE_URL` and `OLLAMA_MODEL` in `.env`. Defaults are `http://127.0.0.1:11434` and `qwen3:4b`. For web search, create a Tavily API key at https://app.tavily.com/ and set `TAVILY_API_KEY=your_key` in `.env`. Tavily currently advertises a free tier with 1,000 API credits per month and no credit card required; check its current terms before use.
 
 ## API examples
 
@@ -56,7 +56,7 @@ curl -X POST http://localhost:3000/api/search \
 
 1. Express + TypeScript API scaffold.
 2. Local Ollama chat endpoint.
-3. Playwright-based Google search tool.
+3. Tavily API-based web search tool.
 4. Public webpage extraction and source metadata.
 5. Route questions between the local model and web tools.
 6. LangGraph orchestration, tool policies, retries, and tracing.
@@ -65,7 +65,7 @@ curl -X POST http://localhost:3000/api/search \
 
 ## Important limitations
 
-Google may rate-limit or block automated browser traffic, and its page markup can change. This is a learning prototype, not a guaranteed search service. Any URL-fetching feature must validate destinations and defend against SSRF before being exposed to untrusted users.
+Web search requires a valid `TAVILY_API_KEY`. Keep the key private and do not commit your real `.env` file. Search availability and free-tier terms depend on the provider. Any URL-fetching feature must validate destinations and defend against SSRF before being exposed to untrusted users.
 
 ## License
 
