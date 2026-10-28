@@ -78,6 +78,21 @@ function parseMcpContent(response: unknown): SearchResult[] {
         results.push(result);
       }
     }
+
+    // The reference DuckDuckGo MCP formats results as numbered titles followed by URL/Snippet lines.
+    const lines = block.text.split(/\\r?\\n/).map((line) => line.trim()).filter(Boolean);
+    for (let index = 0; index < lines.length; index += 1) {
+      const urlMatch = lines[index].match(/^URL:\\s*(https:\\/\\/\\S+)/i);
+      if (!urlMatch) continue;
+      const title = (lines[index - 1] ?? "").replace(/^\\d+[.)]\\s*/, "").replace(/^[-*]\\s*/, "");
+      const snippetLine = lines[index + 1] ?? "";
+      const snippet = snippetLine.replace(/^(?:snippet|description):\\s*/i, "");
+      const result = toSafeResult({ title, url: urlMatch[1], snippet });
+      if (result && !seen.has(result.url)) {
+        seen.add(result.url);
+        results.push(result);
+      }
+    }
   }
 
   return results.slice(0, MAX_RESULTS);
