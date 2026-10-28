@@ -5,7 +5,7 @@ A step-by-step learning project for building a local-first AI agent with Node.js
 ## Goals
 
 - Answer general questions using a local Ollama model.
-- Search the web using public search pages without requiring a search API key.
+- Search Google using a headless Playwright browser without a search API key.
 - Read public webpages and return sourced summaries.
 - Show the sources used so answers can be checked.
 - Add LangGraph orchestration and MCP tools in later steps.
@@ -26,7 +26,7 @@ bash start.sh
 
 The startup script checks Node.js/npm and Ollama, creates `.env` if it is missing, attempts to start the Ollama server if needed, checks the configured model, offers to download it if missing, installs npm dependencies if needed, checks Playwright Chromium, and starts the development server.
 
-Open http://localhost:3000/health after the server starts. Press Ctrl+C to stop the app.
+Open http://localhost:3000/health after the server starts. Press Ctrl+C to stop it.
 
 > The script does not install Ollama itself. If it is missing, install it from the official download page and run `bash start.sh` again. The script never overwrites an existing `.env`.
 
@@ -44,7 +44,7 @@ curl -X POST http://localhost:3000/api/chat \
   -d '{"question":"Explain how Node.js event loops work"}'
 ```
 
-Web search:
+Google web search:
 
 ```bash
 curl -X POST http://localhost:3000/api/search \
@@ -56,7 +56,7 @@ curl -X POST http://localhost:3000/api/search \
 
 1. Express + TypeScript API scaffold.
 2. Local Ollama chat endpoint.
-3. Keyless public web search with multiple provider fallbacks.
+3. Keyless Google search using Playwright.
 4. Public webpage extraction and source metadata.
 5. Route questions between the local model and web tools.
 6. LangGraph orchestration, tool policies, retries, and tracing.
@@ -65,7 +65,7 @@ curl -X POST http://localhost:3000/api/search \
 
 ## Important limitations
 
-The search tool tries public search pages from DuckDuckGo, Bing RSS, and Mojeek in sequence. It does not require an API key or paid search account. These public endpoints are not guaranteed services: they may throttle, change their markup, or block automated traffic, so search can temporarily fail depending on network/provider behavior. The implementation reports provider failures rather than silently returning fabricated results. Any URL-fetching feature must validate destinations and defend against SSRF before being exposed to untrusted users.
+Google search runs in a headless Chromium browser through Playwright; it does not require a search API key or paid search account. Google may show a CAPTCHA, consent page, JavaScript challenge, or block automated traffic, and may change its page markup. In those cases, the search tool returns a clear error instead of inventing results. The project should be used in compliance with Google's terms and applicable network policies. Any URL-fetching feature must validate destinations and defend against SSRF before being exposed to untrusted users.
 
 ## License
 
