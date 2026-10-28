@@ -107,6 +107,54 @@ async function searchDuckDuckGoHtml(query: string): Promise<SearchResult[]> {
   return results;
 }
 
+
+async function searchBingHtml(query: string): Promise<SearchResult[]> {
+  const searchUrl = new URL("https://www.bing.com/search");
+  searchUrl.searchParams.set("q", query);
+  searchUrl.searchParams.set("setlang", "en-US");
+
+  const response = await fetch(searchUrl, {
+    headers: {
+      "User-Agent": USER_AGENT,
+      Accept: "text/html,application/xhtml+xml",
+      "Accept-Language": "en-US,en;q=0.9",
+    },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Bing returned HTTP ${response.status}`);
+  }
+
+  const html = await response.text();
+  if (/captcha|verify you are human|unusual traffic/i.test(html)) {
+    throw new Error("Bing returned an anti-automation page.");
+  }
+
+  const blocks = html.match(/<li\\b[^>]*class=["'][^"']*\\bb_algo\\b[^"']*["'][^>]*>[\\s\\S]*?(?=<li\\b[^>]*class=["'][^"']*\\bb_algo\\b|<\\/ol>|$)/gi) ?? [];
+  const results: SearchResult[] = [];
+
+  for (const block of blocks) {
+    const anchor = block.match(/<h2\\b[^>]*>\\s*<a\\b[^>]*href=["']([^"']+)["'][^>]*>([\\s\\S]*?)<\\/a>\\s*<\\/h2>/i);
+    if (!anchor) continue;
+
+    const snippetMatch = block.match(/<p\\b[^>]*>([\\s\\S]*?)<\\/p>/i);
+    const href = anchor[1].replace(/&amp;/g, "&");
+    const result = safeResult(anchor[2], href, snippetMatch?.[1] ?? "");
+
+    if (result && !results.some((item) => item.url === result.url)) {
+      results.push(result);
+    }
+    if (results.length >= MAX_RESULTS) break;
+  }
+
+  if (results.length === 0) {
+    throw new Error("Bing returned no extractable search results.");
+  }
+
+  return results;
+}
+
 async function searchGoogle(query: string): Promise<SearchResult[]> {
   const browser = await chromium.launch({ headless: true });
   try {
@@ -195,6 +243,18 @@ export async function googleSearch(query: string): Promise<SearchResponse> {
     };
   } catch (error) {
     failures.push(`DuckDuckGo HTML: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  try {
+    const results = await searchBingHtml(normalizedQuery);
+    return {
+      query: normalizedQuery,
+      results,
+      searchedAt: new Date().toISOString(),
+      provider: "bing-html",
+    };
+  } catch (error) {
+    failures.push(`Bing HTML: ${error instanceof Error ? error.message : String(error)}`);
   }
 
   try {
