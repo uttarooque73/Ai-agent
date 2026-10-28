@@ -143,8 +143,11 @@ export async function duckDuckGoMcpSearch(query: string, endpoint: string): Prom
 
     const response = await client.callTool({ name: searchTool.name, arguments: args });
     if (response.isError) {
-      const details = (response.content ?? [])
-        .map((block) => ("text" in block ? block.text : ""))
+      const contentBlocks = Array.isArray(response.content)
+        ? (response.content as unknown as Array<{ text?: string }>)
+        : [];
+      const details = contentBlocks
+        .map((block) => block.text ?? "")
         .filter(Boolean)
         .join("\\n");
       throw new Error(`DuckDuckGo MCP search failed: ${details || "the MCP tool returned an error"}`);
