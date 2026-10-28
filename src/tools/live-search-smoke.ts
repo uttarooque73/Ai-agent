@@ -13,6 +13,19 @@ async function main(): Promise<void> {
     throw new Error("Search completed without any results.");
   }
 
+  if (
+    query === "Node.js official website" &&
+    !response.results.some((result) => {
+      try {
+        return new URL(result.url).hostname === "nodejs.org";
+      } catch {
+        return false;
+      }
+    })
+  ) {
+    throw new Error("Search returned results, but not the expected official Node.js website.");
+  }
+
   console.log(`Provider: ${response.provider ?? "unknown"}`);
   console.log(`Results returned: ${response.results.length}`);
   console.log(`Searched at: ${response.searchedAt}`);
