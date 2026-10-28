@@ -5,10 +5,10 @@ A step-by-step learning project for building a local-first AI agent with Node.js
 ## Goals
 
 - Answer general questions using a local Ollama model.
-- Search Google using a headless Playwright browser without a search API key.
+- Search the web through a configurable remote DuckDuckGo MCP endpoint without adding a search API key.
 - Read public webpages and return sourced summaries.
 - Show the sources used so answers can be checked.
-- Add LangGraph orchestration and MCP tools in later steps.
+- Use the Model Context Protocol (MCP) to connect Jarvis to remote search tools.
 
 ## Prerequisites
 
@@ -32,7 +32,7 @@ Open http://localhost:3000/health after the server starts. Press Ctrl+C to stop 
 
 ## Environment
 
-Set `OLLAMA_BASE_URL` and `OLLAMA_MODEL` in `.env`. Defaults are `http://127.0.0.1:11434` and `qwen3:4b`. **Web search does not require an API key.**
+Set `OLLAMA_BASE_URL` and `OLLAMA_MODEL` in `.env`. Defaults are `http://127.0.0.1:11434` and `qwen3:4b`.\n\n### Connect your remote DuckDuckGo MCP\n\nJarvis now supports a remote MCP server using Streamable HTTP. Add the HTTPS MCP endpoint you already use to your local `.env`:\n\n```dotenv\nDUCKDUCKGO_MCP_URL=https://your-mcp-host.example/mcp\n```\n\nReplace the example with the actual endpoint for your MCP server. Jarvis discovers the available tools and calls the search tool automatically; when this variable is set, web searches use that MCP endpoint instead of Google scraping or the Chrome extension cache. The endpoint must be reachable from the machine running Jarvis and must not require an API key unless you separately extend the client with the provider's supported authentication. Jarvis does not need a DuckDuckGo search API key. **The endpoint URL is not present in this repository, so you must supply the URL of your existing remote MCP server.**
 
 ## API examples
 
@@ -91,7 +91,7 @@ If the local API is stopped, the extension can still display results in its popu
 
 ## Important limitations
 
-Google search runs in a headless Chromium browser through Playwright; it does not require a search API key or paid search account. Google may show a CAPTCHA, consent page, JavaScript challenge, or block automated traffic, and may change its page markup. In those cases, the search tool returns a clear error instead of inventing results. The project should be used in compliance with Google's terms and applicable network policies. Any URL-fetching feature must validate destinations and defend against SSRF before being exposed to untrusted users.
+When `DUCKDUCKGO_MCP_URL` is configured, web search uses the remote MCP server and does not use Google scraping. Without that setting, the legacy Playwright/Chrome fallback remains and Google may show a CAPTCHA, consent page, JavaScript challenge, or block automated traffic. In those cases, the fallback returns a clear error instead of inventing results. The project should be used in compliance with Google's terms and applicable network policies. Any URL-fetching feature must validate destinations and defend against SSRF before being exposed to untrusted users.
 
 ## License
 
