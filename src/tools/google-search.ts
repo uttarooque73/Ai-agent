@@ -123,7 +123,7 @@ async function searchBingHtml(query: string): Promise<SearchResult[]> {
   });
 
   if (!response.ok) {
-    throw new Error(`Bing returned HTTP ${response.status}`);
+    throw new Error("Bing returned HTTP " + response.status);
   }
 
   const html = await response.text();
@@ -131,14 +131,14 @@ async function searchBingHtml(query: string): Promise<SearchResult[]> {
     throw new Error("Bing returned an anti-automation page.");
   }
 
-  const blocks = html.match(/<li\\b[^>]*class=["'][^"']*\\bb_algo\\b[^"']*["'][^>]*>[\\s\\S]*?(?=<li\\b[^>]*class=["'][^"']*\\bb_algo\\b|<\\/ol>|$)/gi) ?? [];
+  const blocks = html.match(/<li\b[^>]*class=["'][^"']*\bb_algo\b[^"']*["'][^>]*>[\s\S]*?(?=<li\b[^>]*class=["'][^"']*\bb_algo\b|<\/ol>|$)/gi) ?? [];
   const results: SearchResult[] = [];
 
   for (const block of blocks) {
-    const anchor = block.match(/<h2\\b[^>]*>\\s*<a\\b[^>]*href=["']([^"']+)["'][^>]*>([\\s\\S]*?)<\\/a>\\s*<\\/h2>/i);
+    const anchor = block.match(/<h2\b[^>]*>\s*<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>\s*<\/h2>/i);
     if (!anchor) continue;
 
-    const snippetMatch = block.match(/<p\\b[^>]*>([\\s\\S]*?)<\\/p>/i);
+    const snippetMatch = block.match(/<p\b[^>]*>([\s\S]*?)<\/p>/i);
     const href = anchor[1].replace(/&amp;/g, "&");
     const result = safeResult(anchor[2], href, snippetMatch?.[1] ?? "");
 
