@@ -52,6 +52,22 @@ curl -X POST http://localhost:3000/api/search \
   -d '{"query":"latest Node.js release"}'
 ```
 
+## Chrome extension (keyless search)
+
+A Manifest V3 extension is available in `chrome-extension/`. It uses a regular Chrome tab rather than a separate headless browser session. Google may still show a CAPTCHA or consent page; the extension does not bypass those prompts.
+
+1. Start Jarvis with `bash start.sh` so the local API is running at `http://127.0.0.1:3000`.
+2. In Chrome, open `chrome://extensions`.
+3. Enable **Developer mode**.
+4. Select **Load unpacked** and choose the repository's `chrome-extension` folder.
+5. Pin **Jarvis Keyless Search** from the Extensions menu.
+6. Open the extension, enter a query, and select **Search**. Google opens in a background tab and the popup displays extracted organic results when available.
+7. If the extension reports a challenge, open the Google tab, complete any legitimate consent or verification prompt yourself, then retry the search.
+
+When the local API is running, the extension sends results to `POST /api/search/extension-results`. Jarvis keeps those results in memory for ten minutes. A matching request to `POST /api/search` can use the cached results instead of starting headless Google search. The cache is not persisted across server restarts.
+
+If the local API is stopped, the extension can still display results in its popup, but it cannot share them with Jarvis.
+
 ## Planned milestones
 
 1. Express + TypeScript API scaffold.
