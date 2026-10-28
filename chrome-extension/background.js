@@ -66,7 +66,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const pending = pendingByTab.get(tabId);
     console.log(LOG, "Received results from content script", {
       tabId, hasPendingSearch: Boolean(pending), challenge: Boolean(message.challenge),
-      resultCount: Array.isArray(message.results) ? message.results.length : 0
+      resultCount: Array.isArray(message.results) ? message.results.length : 0,
+      diagnostics: message.diagnostics || "No diagnostics received; reload the extension and retry."
     });
     if (!pending) {
       console.warn(LOG, "Ignoring results because no search is pending for this tab", { tabId });
