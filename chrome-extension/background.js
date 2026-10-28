@@ -64,15 +64,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     const query = pending.query;
-    fetch("http://127.0.0.1:3000/api/search/extension-results", {
+    const cacheRequest = fetch("http://127.0.0.1:3000/api/search/extension-results", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query, results })
-    }).catch(() => {
-      // The extension can still display results if Jarvis's local API is not running.
-    });
+    }).catch(() => undefined);
 
-    finish(tabId, { ok: true, query, results });
+    // Give the local API a brief chance to cache results before returning to the popup.
+    // The popup still receives results if the API is stopped or slow.
+    void Promise.race([
+      cacheRequest,
+      new Promise((resolve) => setTimeout(resolve, 1000))
+    ]).finally(() => finish(tabId, { ok: true, query, results }));
     return false;
   }
 
