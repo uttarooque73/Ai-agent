@@ -36,13 +36,23 @@ Set `OLLAMA_BASE_URL` and `OLLAMA_MODEL` in `.env`. Defaults are `http://127.0.0
 
 ## API examples
 
-Local chat:
+Local chat (model only):
 
 ```bash
 curl -X POST http://localhost:3000/api/chat \
   -H "Content-Type: application/json" \
   -d '{"question":"Explain how Node.js event loops work"}'
 ```
+
+Chat grounded in web results (no search API key required):
+
+```bash
+curl -X POST http://localhost:3000/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"question":"Summarize the current Node.js release","useWebSearch":true,"searchQuery":"current Node.js release"}'
+```
+
+When `useWebSearch` is true, Jarvis searches using `searchQuery` (or the question if omitted), passes the result titles, snippets, and URLs to Ollama, and returns a `webSearch` status object with the source URLs. If web search is blocked or unavailable, Jarvis continues with the local model and reports the web-search failure in `webSearch.error` instead of pretending the answer was verified.
 
 Google web search:
 
