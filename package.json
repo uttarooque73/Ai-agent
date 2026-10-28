@@ -8,7 +8,9 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:live-search": "tsx src/tools/live-search-smoke.ts",
+    "test:node-version-search": "tsx src/tools/node-version-search-test.ts"
   },
   "dependencies": {
     "@langchain/core": "^1.0.0",

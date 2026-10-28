@@ -12,29 +12,58 @@ export interface SearchResponse {
   query: string;
   results: SearchResult[];
   searchedAt: string;
+  provider?: string;
 }
 
 const REQUEST_TIMEOUT_MS = 20_000;
 const MAX_RESULTS = 5;
 const USER_AGENT =
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
 function cleanText(value: string): string {
-  return value.replace(/\s+/g, " ").trim();
+  return value
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)))
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function safeResult(title: string, rawUrl: string, snippet: string): SearchResult | null {
-  const cleanedTitle = cleanText(title);
   let url: URL;
 
   try {
     url = new URL(rawUrl);
+
+    // Resolve Bing's click-tracking links to the actual destination URL.
+    if ((url.hostname === "bing.com" || url.hostname.endsWith(".bing.com")) && url.pathname === "/ck/a") {
+      const trackingValue = url.searchParams.get("u") ?? "";
+      const encodedDestination = trackingValue.startsWith("a1")
+        ? trackingValue.slice(2)
+        : trackingValue;
+      if (encodedDestination) {
+        const destination = Buffer.from(encodedDestination, "base64url").toString("utf8");
+        if (destination.startsWith("https://")) url = new URL(destination);
+      }
+    }
+
     if (url.protocol !== "https:") return null;
     if (/(^|\.)google\.[a-z.]+$/i.test(url.hostname)) return null;
+    if (/(^|\.)duckduckgo\.com$/i.test(url.hostname)) {
+      const destination = url.searchParams.get("uddg");
+      if (!destination) return null;
+      url = new URL(destination);
+      if (url.protocol !== "https:") return null;
+    }
   } catch {
     return null;
   }
 
+  const cleanedTitle = cleanText(title);
   if (!cleanedTitle || !url.hostname) return null;
 
   return {
@@ -44,38 +73,115 @@ function safeResult(title: string, rawUrl: string, snippet: string): SearchResul
   };
 }
 
-export async function googleSearch(query: string): Promise<SearchResponse> {
-  const normalizedQuery = query.trim();
-  if (!normalizedQuery || normalizedQuery.length > 500) {
-    throw new Error("Search query must contain between 1 and 500 characters.");
+async function searchDuckDuckGoHtml(query: string): Promise<SearchResult[]> {
+  const searchUrl = new URL("https://html.duckduckgo.com/html/");
+  searchUrl.searchParams.set("q", query);
+
+  const response = await fetch(searchUrl, {
+    headers: {
+      "User-Agent": USER_AGENT,
+      Accept: "text/html,application/xhtml+xml",
+      "Accept-Language": "en-US,en;q=0.9",
+    },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
+
+  if (!response.ok) {
+    throw new Error(`DuckDuckGo returned HTTP ${response.status}`);
   }
 
-  // Prefer the configured remote DuckDuckGo MCP when available. It avoids Google scraping.
-  const duckDuckGoMcpUrl = process.env.DUCKDUCKGO_MCP_URL?.trim();
-  if (duckDuckGoMcpUrl) return duckDuckGoMcpSearch(normalizedQuery, duckDuckGoMcpUrl);
+  const html = await response.text();
+  if (/anomaly-modal|bots use duckduckgo|captcha/i.test(html)) {
+    throw new Error("DuckDuckGo returned an anti-automation page.");
+  }
 
-  // Prefer fresh results supplied by the user's regular Chrome session.
-  // The cache is in-memory and expires after ten minutes.
-  const extensionResults = getExtensionSearchResults(normalizedQuery);
-  if (extensionResults) return extensionResults;
+  // Parse each result container and its title link/snippet without an additional dependency.
+  const blocks = html.match(/<div\b[^>]*class=["'][^"']*\bresult\b[^"']*["'][^>]*>[\s\S]*?(?=<div\b[^>]*class=["'][^"']*\bresult\b|$)/gi) ?? [];
+  const results: SearchResult[] = [];
 
+  for (const block of blocks) {
+    const anchor = block.match(/<a\b(?=[^>]*\bclass=["'][^"']*\bresult__a\b[^"']*["'])[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/i);
+    if (!anchor) continue;
+
+    const snippetMatch = block.match(/<[^>]*class=["'][^"']*\bresult__snippet\b[^"']*["'][^>]*>([\s\S]*?)<\//i);
+    const href = anchor[1].replace(/&amp;/g, "&");
+    const result = safeResult(anchor[2], href, snippetMatch?.[1] ?? "");
+
+    if (result && !results.some((item) => item.url === result.url)) {
+      results.push(result);
+    }
+    if (results.length >= MAX_RESULTS) break;
+  }
+
+  if (results.length === 0) {
+    throw new Error("DuckDuckGo returned no extractable search results.");
+  }
+
+  return results;
+}
+
+
+async function searchBingHtml(query: string): Promise<SearchResult[]> {
+  const searchUrl = new URL("https://www.bing.com/search");
+  searchUrl.searchParams.set("q", query);
+  searchUrl.searchParams.set("setlang", "en-US");
+
+  const response = await fetch(searchUrl, {
+    headers: {
+      "User-Agent": USER_AGENT,
+      Accept: "text/html,application/xhtml+xml",
+      "Accept-Language": "en-US,en;q=0.9",
+    },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
+
+  if (!response.ok) {
+    throw new Error("Bing returned HTTP " + response.status);
+  }
+
+  const html = await response.text();
+  if (/captcha|verify you are human|unusual traffic/i.test(html)) {
+    throw new Error("Bing returned an anti-automation page.");
+  }
+
+  const blocks = html.match(/<li\b[^>]*class=["'][^"']*\bb_algo\b[^"']*["'][^>]*>[\s\S]*?(?=<li\b[^>]*class=["'][^"']*\bb_algo\b|<\/ol>|$)/gi) ?? [];
+  const results: SearchResult[] = [];
+
+  for (const block of blocks) {
+    const anchor = block.match(/<h2\b[^>]*>\s*<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>\s*<\/h2>/i);
+    if (!anchor) continue;
+
+    const snippetMatch = block.match(/<p\b[^>]*>([\s\S]*?)<\/p>/i);
+    const href = anchor[1].replace(/&amp;/g, "&");
+    const result = safeResult(anchor[2], href, snippetMatch?.[1] ?? "");
+
+    if (result && !results.some((item) => item.url === result.url)) {
+      results.push(result);
+    }
+    if (results.length >= MAX_RESULTS) break;
+  }
+
+  if (results.length === 0) {
+    throw new Error("Bing returned no extractable search results.");
+  }
+
+  return results;
+}
+
+async function searchGoogle(query: string): Promise<SearchResult[]> {
   const browser = await chromium.launch({ headless: true });
   try {
     const context = await browser.newContext({
       locale: "en-US",
       userAgent: USER_AGENT,
       viewport: { width: 1365, height: 900 },
-      extraHTTPHeaders: {
-        "Accept-Language": "en-US,en;q=0.9",
-      },
+      extraHTTPHeaders: { "Accept-Language": "en-US,en;q=0.9" },
     });
     const page = await context.newPage();
     page.setDefaultNavigationTimeout(REQUEST_TIMEOUT_MS);
 
-    // Google's basic HTML mode avoids depending on its JavaScript-heavy result UI.
-    // It remains keyless, though Google can still block automated traffic.
     const searchUrl = new URL("https://www.google.com/search");
-    searchUrl.searchParams.set("q", normalizedQuery);
+    searchUrl.searchParams.set("q", query);
     searchUrl.searchParams.set("hl", "en");
     searchUrl.searchParams.set("gl", "in");
     searchUrl.searchParams.set("gbv", "1");
@@ -88,9 +194,7 @@ export async function googleSearch(query: string): Promise<SearchResponse> {
       /\/sorry\//i.test(finalUrl) ||
       /unusual traffic|automated queries|verify you are human|captcha|our systems have detected unusual traffic/i.test(bodyText)
     ) {
-      throw new Error(
-        "Google returned an anti-automation or CAPTCHA page. Search is keyless, but Google is blocking automated requests from this network. Open the Google search URL in a regular browser to check whether Google requires verification.",
-      );
+      throw new Error("Google returned an anti-automation or CAPTCHA page.");
     }
 
     const rawResults = await page.locator("a:has(h3)").evaluateAll((anchors) =>
@@ -108,28 +212,75 @@ export async function googleSearch(query: string): Promise<SearchResponse> {
       }),
     );
 
-    const seen = new Set<string>();
     const results: SearchResult[] = [];
     for (const raw of rawResults) {
       const result = safeResult(raw.title, raw.url, raw.snippet);
-      if (!result || seen.has(result.url)) continue;
-      seen.add(result.url);
+      if (!result || results.some((item) => item.url === result.url)) continue;
       results.push(result);
       if (results.length >= MAX_RESULTS) break;
     }
 
     if (results.length === 0) {
-      throw new Error(
-        "Google Search returned no extractable organic results. It may have served a consent page, CAPTCHA, or changed its markup.",
-      );
+      throw new Error("Google returned no extractable organic results.");
     }
+    return results;
+  } finally {
+    await browser.close();
+  }
+}
 
+export async function googleSearch(query: string): Promise<SearchResponse> {
+  const normalizedQuery = query.trim();
+  if (!normalizedQuery || normalizedQuery.length > 500) {
+    throw new Error("Search query must contain between 1 and 500 characters.");
+  }
+
+  const duckDuckGoMcpUrl = process.env.DUCKDUCKGO_MCP_URL?.trim();
+  if (duckDuckGoMcpUrl) {
+    const response = await duckDuckGoMcpSearch(normalizedQuery, duckDuckGoMcpUrl);
+    return { ...response, provider: "duckduckgo-mcp" };
+  }
+
+  const extensionResults = getExtensionSearchResults(normalizedQuery);
+  if (extensionResults) return { ...extensionResults, provider: "browser-extension-cache" };
+
+  const failures: string[] = [];
+
+  try {
+    const results = await searchDuckDuckGoHtml(normalizedQuery);
     return {
       query: normalizedQuery,
       results,
       searchedAt: new Date().toISOString(),
+      provider: "duckduckgo-html",
     };
-  } finally {
-    await browser.close();
+  } catch (error) {
+    failures.push(`DuckDuckGo HTML: ${error instanceof Error ? error.message : String(error)}`);
   }
+
+  try {
+    const results = await searchBingHtml(normalizedQuery);
+    return {
+      query: normalizedQuery,
+      results,
+      searchedAt: new Date().toISOString(),
+      provider: "bing-html",
+    };
+  } catch (error) {
+    failures.push(`Bing HTML: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  try {
+    const results = await searchGoogle(normalizedQuery);
+    return {
+      query: normalizedQuery,
+      results,
+      searchedAt: new Date().toISOString(),
+      provider: "google-playwright",
+    };
+  } catch (error) {
+    failures.push(`Google Playwright: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  throw new Error(`All web search providers failed. ${failures.join(" | ")}`);
 }

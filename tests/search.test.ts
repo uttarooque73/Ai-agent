@@ -7,6 +7,7 @@ vi.mock("playwright", () => ({
 }));
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
 
@@ -46,6 +47,7 @@ function mockBrowser({
 
 describe("Google web search", () => {
   it("extracts organic results from Google without an API key", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Network disabled in unit test")));
     const { browser, page } = mockBrowser({
       results: [
         {
@@ -73,6 +75,7 @@ describe("Google web search", () => {
   });
 
   it("reports a clear error when Google returns an anti-automation page", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Network disabled in unit test")));
     const { browser } = mockBrowser({
       bodyText: "Our systems have detected unusual traffic from your computer network.",
       url: "https://www.google.com/sorry/index",
