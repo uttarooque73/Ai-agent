@@ -12,7 +12,7 @@ const extensionResultsSchema = z.object({
     url: z.string().url().max(2048).refine((value) => {
       try {
         const url = new URL(value);
-        return url.protocol === "https:" && !/(^|\\.)google\\.[a-z.]+$/i.test(url.hostname);
+        return url.protocol === "https:" && !/(^|\.)google\.[a-z.]+$/i.test(url.hostname);
       } catch {
         return false;
       }
