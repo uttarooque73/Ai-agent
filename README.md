@@ -10,32 +10,47 @@ A step-by-step learning project for building a local-first AI agent with Node.js
 - Show the sources used so answers can be checked.
 - Add LangGraph orchestration and MCP tools in later steps.
 
-## Current status
-
-This repository is being initialized. Start with the setup steps below; features will be added incrementally and tested as they are implemented.
-
 ## Prerequisites
 
 - Node.js 20 or newer
-- npm
-- [Ollama](https://ollama.com/) installed and running
-- A local model, for example `qwen3:4b`
+- Ollama installed: https://ollama.com/download
+- Internet access for installing dependencies, browser binaries, and pulling a model when needed
 
-## Setup
+## Quick start (macOS/Linux)
 
 ```bash
-npm install
-npx playwright install chromium
-cp .env.example .env
-ollama pull qwen3:4b
-npm run dev
+git clone https://github.com/uttarooque73/Ai-agent.git
+cd Ai-agent
+bash start.sh
 ```
 
-Check `http://localhost:3000/health` after the server starts.
+The startup script checks Node.js/npm and Ollama, creates `.env` if it is missing, attempts to start the Ollama server if needed, checks the configured model, offers to download it if missing, installs npm dependencies if needed, checks Playwright Chromium, and starts the development server.
+
+Open http://localhost:3000/health after the server starts. Press Ctrl+C to stop the app.
+
+> The script does not install Ollama itself. If it is missing, install it from the official download page and run `bash start.sh` again. The script never overwrites an existing `.env`.
 
 ## Environment
 
-Set `OLLAMA_BASE_URL` and `OLLAMA_MODEL` in `.env`. Keep secrets and local configuration out of Git.
+Set `OLLAMA_BASE_URL` and `OLLAMA_MODEL` in `.env`. Defaults are `http://127.0.0.1:11434` and `qwen3:4b`.
+
+## API examples
+
+Local chat:
+
+```bash
+curl -X POST http://localhost:3000/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"question":"Explain how Node.js event loops work"}'
+```
+
+Web search:
+
+```bash
+curl -X POST http://localhost:3000/api/search \
+  -H "Content-Type: application/json" \
+  -d '{"query":"latest Node.js release"}'
+```
 
 ## Planned milestones
 
