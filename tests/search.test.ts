@@ -33,8 +33,11 @@ function mockBrowser({
       selector === "body" ? bodyLocator : resultLocator,
     ),
   };
-  const browser = {
+  const context = {
     newPage: vi.fn().mockResolvedValue(page),
+  };
+  const browser = {
+    newContext: vi.fn().mockResolvedValue(context),
     close: vi.fn().mockResolvedValue(undefined),
   };
   vi.mocked(chromium.launch).mockResolvedValue(browser as never);
@@ -65,6 +68,7 @@ describe("Google web search", () => {
       expect.stringContaining("https://www.google.com/search?"),
       { waitUntil: "domcontentloaded" },
     );
+    expect(browser.newContext).toHaveBeenCalledOnce();
     expect(browser.close).toHaveBeenCalledOnce();
   });
 
