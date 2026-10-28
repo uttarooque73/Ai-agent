@@ -40,14 +40,14 @@ function safeResult(title: string, rawUrl: string, snippet: string): SearchResul
     url = new URL(rawUrl);
 
     // Resolve Bing's click-tracking links to the actual destination URL.
-    if (/(^|\\.)bing\\.com$/i.test(url.hostname) && url.pathname === "/ck/a") {
+    if ((url.hostname === "bing.com" || url.hostname.endsWith(".bing.com")) && url.pathname === "/ck/a") {
       const trackingValue = url.searchParams.get("u") ?? "";
       const encodedDestination = trackingValue.startsWith("a1")
         ? trackingValue.slice(2)
         : trackingValue;
       if (encodedDestination) {
         const destination = Buffer.from(encodedDestination, "base64url").toString("utf8");
-        if (/^https:\\/\\//i.test(destination)) url = new URL(destination);
+        if (destination.startsWith("https://")) url = new URL(destination);
       }
     }
 
