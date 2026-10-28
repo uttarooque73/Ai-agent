@@ -5,7 +5,7 @@ A step-by-step learning project for building a local-first AI agent with Node.js
 ## Goals
 
 - Answer general questions using a local Ollama model.
-- Search the web on demand through the Tavily Search API, returning structured results for the local agent.
+- Search the web using public search pages without requiring a search API key.
 - Read public webpages and return sourced summaries.
 - Show the sources used so answers can be checked.
 - Add LangGraph orchestration and MCP tools in later steps.
@@ -32,7 +32,7 @@ Open http://localhost:3000/health after the server starts. Press Ctrl+C to stop 
 
 ## Environment
 
-Set `OLLAMA_BASE_URL` and `OLLAMA_MODEL` in `.env`. Defaults are `http://127.0.0.1:11434` and `qwen3:4b`. For web search, create a Tavily API key at https://app.tavily.com/ and set `TAVILY_API_KEY=your_key` in `.env`. Tavily currently advertises a free tier with 1,000 API credits per month and no credit card required; check its current terms before use.
+Set `OLLAMA_BASE_URL` and `OLLAMA_MODEL` in `.env`. Defaults are `http://127.0.0.1:11434` and `qwen3:4b`. **Web search does not require an API key.**
 
 ## API examples
 
@@ -56,7 +56,7 @@ curl -X POST http://localhost:3000/api/search \
 
 1. Express + TypeScript API scaffold.
 2. Local Ollama chat endpoint.
-3. Tavily API-based web search tool.
+3. Keyless public web search with multiple provider fallbacks.
 4. Public webpage extraction and source metadata.
 5. Route questions between the local model and web tools.
 6. LangGraph orchestration, tool policies, retries, and tracing.
@@ -65,7 +65,7 @@ curl -X POST http://localhost:3000/api/search \
 
 ## Important limitations
 
-Web search requires a valid `TAVILY_API_KEY`. Keep the key private and do not commit your real `.env` file. Search availability and free-tier terms depend on the provider. Any URL-fetching feature must validate destinations and defend against SSRF before being exposed to untrusted users.
+The search tool tries public search pages from DuckDuckGo, Bing RSS, and Mojeek in sequence. It does not require an API key or paid search account. These public endpoints are not guaranteed services: they may throttle, change their markup, or block automated traffic, so search can temporarily fail depending on network/provider behavior. The implementation reports provider failures rather than silently returning fabricated results. Any URL-fetching feature must validate destinations and defend against SSRF before being exposed to untrusted users.
 
 ## License
 
